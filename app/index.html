@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Loop Market</title>
+<style>
+:root{--bg:#f4f5fa;--card:#fff;--ink:#16171c;--muted:#6e7480;--brand:#6c4dff;--brand-d:#5533ee;--accent:#00c9a7;--danger:#e5484d;--r:16px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,Roboto,"Segoe UI",sans-serif;background:#e9ebf3;color:var(--ink)}
+.phone{max-width:480px;margin:0 auto;min-height:100dvh;background:var(--bg);position:relative;padding-bottom:84px;box-shadow:0 0 40px rgba(0,0,0,.08)}
+.topbar{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #eceef4}
+.logo{font-weight:800;font-size:20px;letter-spacing:-.5px}.logo span{color:var(--brand)}
+.pill{font-size:11px;font-weight:700;background:#eef0ff;color:var(--brand-d);padding:5px 10px;border-radius:99px}
+.view{display:none;padding-bottom:8px}.view.active{display:block;animation:fade .18s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.searchrow{padding:12px 16px 4px;display:flex;gap:8px}
+.search{flex:1;border:1px solid #e3e6ef;background:#fff;border-radius:12px;padding:11px 14px;font-size:15px;outline:none}
+.search:focus{border-color:var(--brand)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:10px 16px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;border:1px solid #e3e6ef;background:#fff;border-radius:99px;padding:7px 14px;font-size:13px;font-weight:600;color:var(--muted)}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:8px 16px 16px}
+.card{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:0 2px 10px rgba(20,20,40,.06);cursor:pointer;position:relative;transition:transform .12s}
+.card:active{transform:scale(.97)}
+.cover{height:104px;display:flex;align-items:center;justify-content:center;font-size:46px;position:relative}
+.fbadge{position:absolute;top:8px;left:8px;background:linear-gradient(135deg,#ffb020,#ff7847);color:#fff;font-size:10px;font-weight:800;padding:4px 9px;border-radius:99px;letter-spacing:.4px}
+.cbody{padding:10px 12px 12px}
+.ctitle{font-size:13.5px;font-weight:700;line-height:1.3;min-height:35px}
+.ccat{font-size:11px;color:var(--muted);margin-top:2px}
+.crow{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+.price{font-size:16px;font-weight:800}
+.buy-mini{background:var(--brand);color:#fff;border:0;border-radius:10px;padding:7px 13px;font-weight:700;font-size:13px}
+.sect{padding:14px 16px 4px;font-size:13px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;display:flex;background:rgba(255,255,255,.97);backdrop-filter:blur(12px);border-top:1px solid #e8eaf1;padding:8px 4px calc(10px + env(safe-area-inset-bottom));z-index:30}
+.tab{flex:1;border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--muted);padding:6px 0}
+.tab .ic{font-size:21px}
+.tab.on{color:var(--brand-d)}
+.btn{display:block;width:100%;border:0;border-radius:14px;padding:15px;font-size:16px;font-weight:700;cursor:pointer}
+.btn-p{background:var(--brand);color:#fff}.btn-p:active{background:var(--brand-d)}
+.btn-s{background:#eef0ff;color:var(--brand-d);margin-top:10px}
+.btn-g{background:#fff;border:1px solid #e3e6ef;color:var(--ink);margin-top:10px}
+.form{padding:6px 16px 16px}.field{margin-bottom:13px}
+.field label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+.field input,.field textarea,.field select{width:100%;border:1px solid #e3e6ef;border-radius:12px;padding:12px 14px;font-size:15px;font-family:inherit;background:#fff;outline:none}
+.field input:focus,.field textarea:focus{border-color:var(--brand)}
+.field textarea{min-height:88px;resize:vertical}
+.field .hint{font-size:12px;color:var(--muted);margin-top:5px}
+.modal{position:fixed;inset:0;z-index:50;display:none;align-items:flex-end;justify-content:center}
+.modal.open{display:flex}
+.scrim{position:absolute;inset:0;background:rgba(15,15,25,.5)}
+.sheet{position:relative;background:#fff;width:100%;max-width:480px;max-height:92dvh;overflow-y:auto;border-radius:22px 22px 0 0;padding:20px 18px calc(22px + env(safe-area-inset-bottom));animation:up .22s ease}
+@keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+.grab{width:44px;height:5px;border-radius:99px;background:#e3e6ef;margin:0 auto 14px}
+.dcover{height:150px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:72px;margin-bottom:14px}
+.dtitle{font-size:22px;font-weight:800;letter-spacing:-.4px}
+.dmeta{color:var(--muted);font-size:13px;margin:6px 0 10px}
+.ddesc{font-size:14.5px;line-height:1.55;color:#33363e}
+.drow{display:flex;justify-content:space-between;align-items:center;background:#f6f7fb;border-radius:12px;padding:12px 14px;margin-top:10px;font-size:14px}
+.drow b{font-size:16px}
+.tiplist{display:flex;gap:8px;margin-top:8px}
+.tip{flex:1;border:1.5px solid #e3e6ef;background:#fff;border-radius:12px;padding:10px 0;font-weight:700;font-size:14px}
+.tip.on{border-color:var(--brand);background:#eef0ff;color:var(--brand-d)}
+.notice{background:#fff8e6;border:1px solid #f0dfa8;color:#7a5c00;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.5;margin:12px 16px}
+.notice b{display:block;margin-bottom:2px}
+.kpis{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:8px 16px}
+.kpi{background:#fff;border-radius:14px;padding:13px 10px;text-align:center;box-shadow:0 2px 8px rgba(20,20,40,.05)}
+.kpi .v{font-size:17px;font-weight:800}.kpi .l{font-size:10.5px;color:var(--muted);margin-top:3px;font-weight:600}
+.srow{display:flex;align-items:center;gap:12px;background:#fff;border-radius:14px;padding:12px 14px;margin:8px 16px;box-shadow:0 2px 8px rgba(20,20,40,.05)}
+.sdot{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex:0 0 auto}
+.smain{flex:1;min-width:0}.st{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ss{font-size:12px;color:var(--muted);margin-top:2px}
+.samt{text-align:right}.samt .a{font-weight:800;font-size:14px}.samt .f{font-size:11px;color:var(--accent);font-weight:700}
+.streams{margin:4px 16px 12px;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 8px rgba(20,20,40,.05)}
+.stream{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;border-bottom:1px solid #f1f2f7;font-size:14px}
+.stream:last-child{border:0}.stream b{font-size:15px}
+.legal{font-size:14px;line-height:1.65;color:#33363e}.legal h3{font-size:16px;margin:16px 0 6px}.legal p{margin:8px 0}
+.hero{padding:34px 22px 20px;text-align:center;background:linear-gradient(160deg,#1c1038,#4a2bd8 60%,#7b5cff);color:#fff;border-radius:0 0 28px 28px}
+.hero h1{font-size:30px;margin:0 0 8px;letter-spacing:-.8px}
+.hero p{opacity:.85;font-size:15px;line-height:1.55;margin:0 0 18px}
+.hero .btn-p{background:#fff;color:#3a1fc0}
+.how{padding:18px}
+.hstep{display:flex;gap:14px;background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px rgba(20,20,40,.05)}
+.hnum{width:38px;height:38px;border-radius:12px;background:#eef0ff;color:var(--brand-d);font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto;font-size:17px}
+.hstep b{display:block;margin-bottom:4px}.hstep p{margin:0;font-size:13.5px;color:var(--muted);line-height:1.5}
+.center{text-align:center;padding:40px 24px;color:var(--muted)}
+.big{font-size:52px;margin-bottom:10px}
+.x{position:absolute;top:14px;right:16px;border:0;background:#f1f2f7;width:34px;height:34px;border-radius:99px;font-size:16px;color:var(--muted)}
+.dl{background:#e9fbf6;border:1.5px dashed #35c99f;border-radius:14px;padding:16px;margin-top:12px;text-align:center}
+.dl a{color:#0a8a68;font-weight:800;word-break:break-all}
+.foot{padding:18px;text-align:center;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="topbar"><div class="logo">Loop<span>Market</span></div><div class="pill" id="mode-pill">DEMO MODE</div></div>
+
+  <!-- HOME -->
+  <div class="view active" id="view-home">
+    <div class="searchrow"><input class="search" id="q" placeholder="Search digital products…" oninput="renderHome()"></div>
+    <div class="chips" id="cats"></div>
+    <div class="sect">Featured</div>
+    <div class="grid" id="grid-featured"></div>
+    <div class="sect">All products</div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <!-- SELL -->
+  <div class="view" id="view-sell">
+    <div class="sect">New listing</div>
+    <div class="form">
+      <div class="field"><label>Title</label><input id="f-title" placeholder="e.g. Moody Lightroom Presets"></div>
+      <div class="field"><label>Price (USD)</label><input id="f-price" type="number" min="1" step="0.01" placeholder="19.00"></div>
+      <div class="field"><label>Category</label><select id="f-cat"><option>Presets</option><option>Templates</option><option>Music</option><option>Ebooks</option><option>Design</option><option>Software</option><option>Other</option></select></div>
+      <div class="field"><label>Description</label><textarea id="f-desc" placeholder="What does the buyer get?"></textarea></div>
+      <div class="field"><label>Delivery — file link or instructions</label><textarea id="f-delivery" placeholder="https://… download link, or how the buyer receives the product"></textarea><div class="hint">Delivered to the buyer automatically after payment.</div></div>
+      <button class="btn btn-p" onclick="createListing()">Publish listing</button>
+      <button class="btn btn-s" onclick="connectStripe()">⬡ Connect Stripe to get paid</button>
+      <div class="hint" style="font-size:12px;color:var(--muted);margin-top:8px">Connect links your Stripe account via the backend so payouts land in your bank automatically. In demo mode this step is simulated.</div>
+    </div>
+    <div class="sect">Your listings</div>
+    <div id="my-listings"></div>
+  </div>
+
+  <!-- EARNINGS -->
+  <div class="view" id="view-earnings">
+    <div class="sect">Overview</div>
+    <div class="kpis">
+      <div class="kpi"><div class="v" id="k-gross">$0</div><div class="l">SALES VOLUME</div></div>
+      <div class="kpi"><div class="v" id="k-cut" style="color:var(--accent)">$0</div><div class="l">PLATFORM CUT</div></div>
+      <div class="kpi"><div class="v" id="k-net">$0</div><div class="l">SELLER PAYOUTS</div></div>
+    </div>
+    <div class="sect">Revenue by stream</div>
+    <div class="streams" id="streams"></div>
+    <div class="sect">Sales</div>
+    <div id="sales-list"></div>
+  </div>
+
+  <!-- ACCOUNT -->
+  <div class="view" id="view-account">
+    <div class="sect">Settings</div>
+    <div class="form">
+      <div class="field"><label>Backend URL</label><input id="s-url" placeholder="https://your-backend.onrender.com"><div class="hint">Paste your deployed backend URL to enable real Stripe checkout and live earnings. Empty = demo mode.</div></div>
+      <div class="field"><label>Platform fee %</label><input id="s-fee" type="number" min="0" max="50" step="0.5"></div>
+      <div class="field"><label>Your Stripe account ID (seller)</label><input id="s-acct" placeholder="acct_…"><div class="hint">Filled automatically after Stripe onboarding.</div></div>
+      <button class="btn btn-p" onclick="saveSettings()">Save settings</button>
+    </div>
+    <div class="sect">Premium seller</div>
+    <div class="form">
+      <div class="drow"><div><b>Loop Market Premium</b><div class="dmeta" id="prem-status">Lower fees, priority placement, analytics.</div></div><div style="font-weight:800">$9.99/mo</div></div>
+      <button class="btn btn-s" onclick="goPremium()">Upgrade to Premium</button>
+    </div>
+    <div class="sect">Grow</div>
+    <div class="form"><button class="btn btn-g" onclick="showView('promo')">📣 Promote Loop Market</button></div>
+    <div class="sect">Legal</div>
+    <div class="form">
+      <button class="btn btn-g" onclick="openLegal('terms')">Terms of Service</button>
+      <button class="btn btn-g" onclick="openLegal('privacy')">Privacy Policy</button>
+      <button class="btn btn-g" onclick="openLegal('seller')">Seller Agreement</button>
+    </div>
+    <div class="foot">Loop Market · v1.0<br>© 2026 Chuck. All rights reserved.</div>
+  </div>
+
+  <!-- PROMO LANDING -->
+  <div class="view" id="view-promo">
+    <div class="hero">
+      <h1>Loop Market</h1>
+      <p>The marketplace for digital products. List in minutes, get paid automatically, keep 90% of every sale.</p>
+      <button class="btn btn-p" onclick="showView('home')">Start selling — it's free</button>
+      <div style="margin-top:12px"><button class="btn btn-g" style="background:rgba(255,255,255,.15);border:0;color:#fff" onclick="shareApp()">Share this page</button></div>
+    </div>
+    <div class="how">
+      <div class="hstep"><div class="hnum">1</div><div><b>List your digital product</b><p>Presets, templates, music, ebooks, icons — upload your delivery link and set a price.</p></div></div>
+      <div class="hstep"><div class="hnum">2</div><div><b>Buyers check out securely</b><p>Stripe handles payment. Your download link is delivered to the buyer automatically — you never lift a finger.</p></div></div>
+      <div class="hstep"><div class="hnum">3</div><div><b>Get paid automatically</b><p>Money lands in your bank via Stripe Connect. Loop Market keeps a 10% platform fee plus a small handling fee per order.</p></div></div>
+      <div class="notice" style="margin:4px 0 0"><b>⚡ It earns while you market.</b>Sales, checkout, fee collection, payouts, delivery and receipts all run automatically through Stripe — marketing and earning happen at the same time. Nothing needs to pause.</div>
+    </div>
+  </div>
+
+  <nav class="tabbar">
+    <button class="tab on" data-v="home" onclick="showView('home')"><span class="ic">🏠</span>Home</button>
+    <button class="tab" data-v="sell" onclick="showView('sell')"><span class="ic">＋</span>Sell</button>
+    <button class="tab" data-v="earnings" onclick="showView('earnings')"><span class="ic">📈</span>Earnings</button>
+    <button class="tab" data-v="account" onclick="showView('account')"><span class="ic">👤</span>Account</button>
+  </nav>
+</div>
+
+<!-- PRODUCT DETAIL -->
+<div class="modal" id="m-product"><div class="scrim" onclick="closeModal('m-product')"></div><div class="sheet"><div class="grab"></div><button class="x" onclick="closeModal('m-product')">✕</button><div id="pd"></div></div></div>
+
+<!-- CHECKOUT -->
+<div class="modal" id="m-checkout"><div class="scrim" onclick="closeModal('m-checkout')"></div><div class="sheet"><div class="grab"></div><button class="x" onclick="closeModal('m-checkout')">✕</button><div id="co"></div></div></div>
+
+<!-- LEGAL -->
+<div class="modal" id="m-legal"><div class="scrim" onclick="closeModal('m-legal')"></div><div class="sheet"><div class="grab"></div><button class="x" onclick="closeModal('m-legal')">✕</button><div class="legal" id="legal-body"></div></div></div>
+
+<script>
+/* ============ helpers ============ */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const money=c=>'$'+(Number(c||0)/100).toFixed(2);
+const store={
+  get(k,f){try{const v=localStorage.getItem(k);return v!==null?JSON.parse(v):f}catch(e){return f}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+};
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+/* ============ seed catalog ============ */
+const SEED=[
+ {id:'seed-presets',title:'Moody Lightroom Presets',price:1900,cat:'Presets',emoji:'📷',g:'linear-gradient(135deg,#ff9a56,#c94b7c)',desc:'12 cinematic presets for portraits and travel. One-tap install for Lightroom Mobile & Desktop.',delivery:{fileUrl:'',instructions:'Download link is emailed instantly after checkout.'},seller:'Loop Studio'},
+ {id:'seed-notion',title:'Ultimate Notion Creator Pack',price:1200,cat:'Templates',emoji:'📝',g:'linear-gradient(135deg,#6c4dff,#9d7bff)',desc:'40+ Notion templates: content calendar, finance tracker, project OS and more.',delivery:{fileUrl:'',instructions:'Duplicate link delivered automatically after payment.'},seller:'Loop Studio'},
+ {id:'seed-beats',title:'Midnight Beat Pack — 10 Beats',price:2900,cat:'Music',emoji:'🎹',g:'linear-gradient(135deg,#141e30,#5b2bd9)',desc:'10 royalty-free trap & R&B beats, tracked-out WAV + MP3 with full commercial rights.',delivery:{fileUrl:'',instructions:'ZIP download appears instantly after checkout.'},seller:'Loop Studio'},
+ {id:'seed-ebook',title:'Sell Digital Products (ebook)',price:900,cat:'Ebooks',emoji:'📕',g:'linear-gradient(135deg,#00b09b,#96c93d)',desc:'The 80-page playbook for launching a digital product store from zero.',delivery:{fileUrl:'',instructions:'PDF + EPUB delivered instantly after checkout.'},seller:'Loop Studio'},
+ {id:'seed-icons',title:'Minimal Icon Pack — 500 Icons',price:1500,cat:'Design',emoji:'🎨',g:'linear-gradient(135deg,#f857a6,#ff5858)',desc:'500 pixel-perfect line icons in SVG, PNG and Figma. Lifetime updates.',delivery:{fileUrl:'',instructions:'Download link delivered automatically after payment.'},seller:'Loop Studio'},
+ {id:'seed-uikit',title:'SaaS UI Kit for Figma',price:2400,cat:'Design',emoji:'🧩',g:'linear-gradient(135deg,#2193b0,#6dd5ed)',desc:'120+ components, dark mode included. Ship your MVP frontend in days.',delivery:{fileUrl:'',instructions:'Figma link delivered instantly after checkout.'},seller:'Loop Studio'}
+];
+const CATS=['All','Presets','Templates','Music','Ebooks','Design','Software','Other'];
+
+/* ============ settings & state ============ */
+function getSettings(){return Object.assign({backendUrl:'',feePercent:10,sellerAccountId:'',sellerEmail:''},store.get('lm_settings',{}));}
+function saveSettingsObj(s){store.set('lm_settings',s);paintMode();}
+function paintMode(){$('#mode-pill').textContent=getSettings().backendUrl?'LIVE':'DEMO MODE';}
+function allProducts(){return SEED.concat(store.get('lm_listings',[]));}
+function getProduct(id){return allProducts().find(p=>p.id===id);}
+function isPromoted(id){const p=store.get('lm_promoted',{});return p[id]&&p[id]>Date.now();}
+async function api(path,opts){
+  const {backendUrl}=getSettings();if(!backendUrl)return null;
+  try{const r=await fetch(backendUrl.replace(/\/$/,'')+path,Object.assign({headers:{'Content-Type':'application/json'}},opts||{}));if(!r.ok)return null;return await r.json();}
+  catch(e){return null;}
+}
+function feeFor(priceCents,feePct){return Math.round(priceCents*(feePct==null?getSettings().feePercent:feePct)/100)+30;}
+
+/* ============ navigation ============ */
+function showView(v){
+  $$('.view').forEach(x=>x.classList.remove('active'));
+  $('#view-'+v).classList.add('active');
+  $$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
+  if(v==='earnings')renderEarnings();
+  if(v==='sell')renderMyListings();
+  if(v==='account')fillSettings();
+  window.scrollTo(0,0);
+}
+function openModal(id){$('#'+id).classList.add('open');}
+function closeModal(id){$('#'+id).classList.remove('open');}
+
+/* ============ home ============ */
+let curCat='All';
+function renderCats(){
+  $('#cats').innerHTML=CATS.map(c=>`<button class="chip${c===curCat?' on':''}" onclick="curCat='${c}';renderHome()">${c}</button>`).join('');
+}
+function cardHTML(p){
+  const promo=isPromoted(p.id);
+  return `<div class="card" onclick="openProduct('${p.id}')">
+    <div class="cover" style="background:${p.g||'linear-gradient(135deg,#6c4dff,#9d7bff)'}">${p.emoji||'📦'}${promo?'<span class="fbadge">FEATURED</span>':''}</div>
+    <div class="cbody"><div class="ctitle">${esc(p.title)}</div><div class="ccat">${esc(p.cat)} · ${esc(p.seller||'Seller')}</div>
+    <div class="crow"><span class="price">${money(p.price)}</span><button class="buy-mini" onclick="event.stopPropagation();quickBuy('${p.id}')">Buy</button></div></div></div>`;
+}
+function renderHome(){
+  renderCats();
+  const q=($('#q').value||'').toLowerCase();
+  const list=allProducts().filter(p=>(curCat==='All'||p.cat===curCat)&&(p.title+' '+p.desc).toLowerCase().includes(q));
+  const feat=list.filter(p=>isPromoted(p.id)), rest=list.filter(p=>!isPromoted(p.id));
+  $('#grid-featured').innerHTML=feat.length?feat.map(cardHTML).join(''):'<div style="grid-column:1/-1" class="center">No featured listings yet.</div>';
+  $('#grid').innerHTML=rest.length?rest.map(cardHTML).join(''):'<div style="grid-column:1/-1" class="center">No products found.</div>';
+}
+
+/* ============ product detail + share ============ */
+let curProduct=null;
+function openProduct(id){
+  const p=getProduct(id);if(!p)return;curProduct=p;
+  $('#pd').innerHTML=`
+    <div class="dcover" style="background:${p.g||'linear-gradient(135deg,#6c4dff,#9d7bff)'}">${p.emoji||'📦'}</div>
+    <div class="dtitle">${esc(p.title)}</div>
+    <div class="dmeta">${esc(p.cat)} · sold by ${esc(p.seller||'Seller')}${isPromoted(p.id)?' · ⭐ Featured':''}</div>
+    <div class="ddesc">${esc(p.desc)}</div>
+    <div class="drow"><span>Price</span><b>${money(p.price)}</b></div>
+    <div class="drow"><span>Delivery</span><span style="font-size:13px;color:var(--muted)">Automatic after payment</span></div>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="btn btn-p" style="flex:3" onclick="quickBuy('${p.id}')">Buy now — ${money(p.price)}</button>
+      <button class="btn btn-g" style="flex:1;margin-top:0" onclick="shareProduct('${p.id}')">↗</button>
+    </div>
+    <div class="hint" style="font-size:12px;color:var(--muted);margin-top:10px;text-align:center">Secure checkout via Stripe${getSettings().backendUrl?'':' · demo mode — no real payment'}</div>`;
+  openModal('m-product');
+}
+function shareProduct(id){
+  const p=getProduct(id);if(!p)return;
+  const url=location.origin+location.pathname+'#p='+id;
+  const data={title:p.title+' — Loop Market',text:p.title+' — '+money(p.price)+' on Loop Market',url};
+  if(navigator.share){navigator.share(data).catch(()=>{});}
+  else{navigator.clipboard&&navigator.clipboard.writeText(url);alert('Product link copied:\n'+url);}
+}
+function shareApp(){
+  const url=location.origin+location.pathname+'?view=promo';
+  const data={title:'Loop Market',text:'Sell digital products and get paid automatically.',url};
+  if(navigator.share){navigator.share(data).catch(()=>{});}
+  else{navigator.clipboard&&navigator.clipboard.writeText(url);alert('Landing page link copied:\n'+url);}
+}
+
+/* ============ checkout ============ */
+let buyCtx=null;
+function quickBuy(id){
+  const p=getProduct(id);if(!p)return;
+  closeModal('m-product');
+  buyCtx={p,tip:0};
+  const s=getSettings();
+  $('#co').innerHTML=`
+    <div class="dtitle">Checkout</div>
+    <div class="dmeta">${esc(p.title)} · ${money(p.price)}</div>
+    <div class="field" style="margin-top:6px"><label>Add a tip for the creator? (optional)</label>
+      <div class="tiplist" id="tips">
+        ${[0,100,200,500].map(t=>`<button class="tip${t===0?' on':''}" data-t="${t}" onclick="setTip(${t})">${t===0?'No tip':money(t)}</button>`).join('')}
+      </div>
+      <div class="hint">Tips go to the seller in full.</div>
+    </div>
+    <div class="drow"><span>Total</span><b id="co-total">${money(p.price)}</b></div>
+    ${s.backendUrl?'':'<div class="notice"><b>🧪 Demo checkout</b>No backend URL is configured, so this is a simulated purchase. Add your backend URL in Account → Settings for real Stripe payments.</div>'}
+    <button class="btn btn-p" style="margin-top:14px" onclick="confirmBuy()">Pay ${money(p.price)}</button>
+    <div class="hint" style="font-size:12px;color:var(--muted);margin-top:10px;text-align:center">${s.backendUrl?'Secure payment via Stripe Checkout.':'Demo mode — no real payment.'}</div>`;
+  openModal('m-checkout');
+}
+function setTip(t){buyCtx.tip=t;$$('#tips .tip').forEach(b=>b.classList.toggle('on',Number(b.dataset.t)===t));$('#co-total').textContent=money(buyCtx.p.price+t);}
+async function confirmBuy(){
+  const {p,tip}=buyCtx,s=getSettings();
+  const sellerAcct=s.sellerAccountId||p.sellerAccountId||'';
+  if(s.backendUrl){
+    if(!sellerAcct){alert('This demo listing has no seller Stripe account connected yet. In production each seller completes Stripe onboarding first.');return;}
+    const r=await api('/api/checkout/session',{method:'POST',body:JSON.stringify({
+      productId:p.id,title:p.title,priceCents:p.price,tipCents:tip,
+      sellerStripeAccountId:sellerAcct,
+      deliveryUrl:(p.delivery&&p.delivery.fileUrl)||'',deliveryInstructions:(p.delivery&&p.delivery.instructions)||''
+    })});
+    if(r&&r.url){location.href=r.url;return;}
+    alert('Could not reach the backend. Check the backend URL in settings.');
+    return;
+  }
+  // demo checkout
+  const fee=feeFor(p.price);
+  const sales=store.get('lm_demo_sales',[]);
+  sales.push({id:'demo_'+Date.now(),stream:'sale',product:p.title,productId:p.id,amount:p.price+tip,tip:tip,currency:'USD',fee:fee,feePercent:s.feePercent,handlingFee:30,sellerAccount:'demo',buyerEmail:'demo buyer',created:new Date().toISOString(),demo:true,delivery:p.delivery||null});
+  store.set('lm_demo_sales',sales);
+  closeModal('m-checkout');
+  showDelivery({paid:true,product:p.title,delivery:p.delivery||null,demo:true});
+}
+function showDelivery(d){
+  $('#co').innerHTML=`
+    <div class="center" style="padding-top:8px"><div class="big">✅</div>
+    <h2 style="margin:0 0 6px">Payment successful</h2>
+    <p style="margin:0 0 4px"><b>${esc(d.product||'')}</b></p>
+    ${d.demo?'<div class="notice"><b>🧪 Demo purchase</b>This was simulated — no money moved.</div>':''}
+    </div>
+    <div class="dl"><div style="font-weight:800;margin-bottom:8px">Your download</div>
+      ${d.delivery&&d.delivery.fileUrl?`<a href="${esc(d.delivery.fileUrl)}" target="_blank" rel="noopener">${esc(d.delivery.fileUrl)}</a>`:'<div style="color:var(--muted);font-size:13px">No file link was attached to this listing.</div>'}
+      ${d.delivery&&d.delivery.instructions?`<div style="font-size:13px;margin-top:10px;color:#33363e">${esc(d.delivery.instructions)}</div>`:''}
+    </div>
+    <button class="btn btn-p" style="margin-top:16px" onclick="closeModal('m-checkout');showView('home')">Back to browsing</button>`;
+  openModal('m-checkout');
+}
+async function handleReturnParams(){
+  const q=new URLSearchParams(location.search);
+  if(q.get('view')==='promo'){showView('promo');}
+  const h=(location.hash||'').match(/#p=(.+)/);if(h&&getProduct(h[1])){openProduct(h[1]);}
+  if(q.get('purchase')==='success'){
+    const sid=q.get('session_id'),s=getSettings();
+    if(s.backendUrl&&sid){
+      $('#co').innerHTML='<div class="center"><div class="big">⏳</div><p>Confirming your payment…</p></div>';openModal('m-checkout');
+      const d=await api('/api/delivery/'+encodeURIComponent(sid));
+      if(d&&d.paid){showDelivery(d);}else{$('#co').innerHTML='<div class="center"><div class="big">✅</div><p>Payment received! Your download link is on its way.</p><button class="btn btn-p" onclick="closeModal(\'m-checkout\')">Done</button></div>';}
+    }else if(q.get('purchase')==='success'){showDelivery({paid:true,product:'Your product',delivery:null,demo:true});}
+    history.replaceState(null,'',location.pathname);
+  }
+  if(q.get('promotion')==='success'){alert('🎉 Your listing is now Featured!');history.replaceState(null,'',location.pathname);}
+  if(q.get('premium')==='success'){alert('🎉 Welcome to Premium!');history.replaceState(null,'',location.pathname);}
+}
+
+/* ============ sell ============ */
+function createListing(){
+  const title=$('#f-title').value.trim(),price=parseFloat($('#f-price').value);
+  if(!title||!(price>0)){alert('Give your listing a title and a price.');return;}
+  const list=store.get('lm_listings',[]);
+  list.push({id:'u_'+Date.now(),title,price:Math.round(price*100),cat:$('#f-cat').value,desc:$('#f-desc').value.trim()||'No description yet.',emoji:'📦',g:'linear-gradient(135deg,#3a3f4b,#6e7480)',delivery:{fileUrl:'',instructions:$('#f-delivery').value.trim()},seller:'You',mine:true});
+  store.set('lm_listings',list);
+  ['f-title','f-price','f-desc','f-delivery'].forEach(i=>$('#'+i).value='');
+  renderMyListings();renderHome();alert('🎉 Listing published!');
+}
+function renderMyListings(){
+  const list=store.get('lm_listings',[]);
+  $('#my-listings').innerHTML=list.length?list.map(p=>`
+    <div class="srow"><div class="sdot" style="background:${p.g}">${p.emoji}</div>
+    <div class="smain"><div class="st">${esc(p.title)}${isPromoted(p.id)?' ⭐':''}</div><div class="ss">${money(p.price)} · ${esc(p.cat)}</div></div>
+    <button class="buy-mini" onclick="promoteListing('${p.id}')">Promote</button></div>`
+    ).join(''):'<div class="center">No listings yet — publish your first one above.</div>';
+}
+async function connectStripe(){
+  const s=getSettings();
+  if(!s.backendUrl){alert('Demo mode: connect is simulated.\n\nWith a backend URL configured, this opens Stripe\'s secure onboarding so sellers can receive payouts.');return;}
+  const email=s.sellerEmail||prompt('Email for your Stripe seller account:');
+  if(!email)return;s.sellerEmail=email;
+  const r=await api('/api/connect/onboarding?email='+encodeURIComponent(email));
+  if(r&&r.url){s.sellerAccountId=r.accountId;saveSettingsObj(s);fillSettings();window.open(r.url,'_blank');}
+  else alert('Could not reach the backend. Check the backend URL in settings.');
+}
+async function promoteListing(id){
+  const p=getProduct(id);if(!p)return;const s=getSettings();
+  if(!s.backendUrl){
+    const pr=store.get('lm_promoted',{});pr[id]=Date.now()+7*864e5;store.set('lm_promoted',pr);
+    renderMyListings();renderHome();alert('🎉 (Demo) Listing marked as Featured for 7 days.');return;
+  }
+  if(!s.sellerAccountId){alert('Connect Stripe first so we know which seller is promoting.');return;}
+  const r=await api('/api/promotions/checkout',{method:'POST',body:JSON.stringify({productId:p.id,productTitle:p.title,sellerStripeAccountId:s.sellerAccountId,email:s.sellerEmail})});
+  if(r&&r.url)location.href=r.url;else alert('Could not reach the backend.');
+}
+
+/* ============ earnings ============ */
+function streamRows(by){
+  const rows=[
+    ['💰 Sale cuts',by.sale?money(by.sale.platformCut):money(0),by.sale?by.sale.count+' sales':''],
+    ['🧾 Handling fees',null,null],
+    ['⭐ Promotions',by.promotion?money(by.promotion.gross):money(0),by.promotion?by.promotion.count+' sold':''],
+    ['👑 Subscriptions',by.subscription?money(by.subscription.gross):money(0),by.subscription?by.subscription.count+' payments':''],
+    ['💝 Tips (to sellers)',by.tip?money(by.tip.gross):money(0),by.tip?by.tip.count+' tips':'']
+  ];
+  return rows.map(r=>`<div class="stream"><span>${r[0]}${r[2]?' <span style="color:var(--muted);font-size:12px">'+r[2]+'</span>':''}</span><b>${r[1]==null?'<span style="color:var(--muted)">incl. in cuts</span>':r[1]}</b></div>`).join('');
+}
+async function renderEarnings(){
+  const s=getSettings();
+  let sales=store.get('lm_demo_sales',[]).slice().reverse();
+  let by=null,live=false;
+  if(s.backendUrl){
+    const r=await api('/api/sales');if(r&&r.sales){sales=r.sales;live=true;}
+    const rev=await api('/api/revenue');if(rev&&rev.byStream)by=rev.byStream;
+  }
+  let gross=0,cut=0;sales.forEach(x=>{gross+=x.amount||0;cut+=x.fee||0;});
+  $('#k-gross').textContent=money(gross);
+  $('#k-cut').textContent=money(cut);
+  $('#k-net').textContent=money(gross-cut);
+  $('#streams').innerHTML=streamRows(by||{});
+  if(!live)$('#streams').insertAdjacentHTML('afterbegin','<div class="stream"><span>ℹ️ Demo data</span><b style="font-size:12px;color:var(--muted)">connect backend for live</b></div>');
+  $('#sales-list').innerHTML=sales.length?sales.map(x=>`
+    <div class="srow"><div class="sdot" style="background:#eef0ff">🧾</div>
+    <div class="smain"><div class="st">${esc(x.product||'Sale')}</div><div class="ss">${new Date(x.created).toLocaleDateString()} · ${esc(x.buyerEmail||'buyer')}${x.demo?' · demo':''}</div></div>
+    <div class="samt"><div class="a">${money(x.amount)}</div><div class="f">cut ${money(x.fee)}</div></div></div>`
+    ).join(''):'<div class="center">No sales yet.<br>Share your products to get the first one!</div>';
+}
+
+/* ============ account ============ */
+function fillSettings(){
+  const s=getSettings();
+  $('#s-url').value=s.backendUrl;$('#s-fee').value=s.feePercent;$('#s-acct').value=s.sellerAccountId;
+  (async()=>{
+    if(s.backendUrl&&s.sellerAccountId){
+      const r=await api('/api/subscriptions/status?sellerAccount='+encodeURIComponent(s.sellerAccountId));
+      if(r&&r.active)$('#prem-status').innerHTML='<b style="color:var(--accent)">✓ Premium active</b>';
+    }
+  })();
+}
+function saveSettings(){
+  const s=getSettings();
+  s.backendUrl=$('#s-url').value.trim().replace(/\/$/,'');
+  s.feePercent=Math.min(50,Math.max(0,Number($('#s-fee').value)||10));
+  s.sellerAccountId=$('#s-acct').value.trim();
+  saveSettingsObj(s);alert('Settings saved.');
+}
+async function goPremium(){
+  const s=getSettings();
+  if(!s.backendUrl){alert('Demo mode: premium is simulated.\n\nWith a backend URL configured, this opens Stripe Checkout for the $9.99/mo Premium seller subscription.');return;}
+  if(!s.sellerAccountId){alert('Connect Stripe first (Sell tab), then upgrade.');return;}
+  const r=await api('/api/subscriptions/checkout',{method:'POST',body:JSON.stringify({sellerStripeAccountId:s.sellerAccountId,email:s.sellerEmail})});
+  if(r&&r.url)location.href=r.url;else alert('Could not reach the backend.');
+}
+
+/* ============ legal ============ */
+const LEGAL={
+terms:{t:'Terms of Service',b:`
+<p><i>Last updated: September 2026. This is a template — not legal advice. Have an attorney review before launch.</i></p>
+<h3>1. The service</h3><p>Loop Market is a marketplace for digital products. Sellers list products; buyers purchase download access. Loop Market processes payments through Stripe and never holds buyer funds beyond the platform fee.</p>
+<h3>2. Accounts</h3><p>Sellers must complete Stripe identity verification before receiving payouts. You are responsible for the accuracy of your listings and delivery files.</p>
+<h3>3. Fees</h3><p>Loop Market retains a platform fee of 10% of the item price plus a $0.30 handling fee per order, deducted automatically at checkout. The fee percent is shown in the app and may change with notice.</p>
+<h3>4. Digital delivery</h3><p>Products are delivered electronically immediately after successful payment. Because of the nature of digital goods, all sales are final except where required by law or covered by our refund policy.</p>
+<h3>5. Prohibited items</h3><p>Pirated or unlicensed content, malware, weapons, adult content, hateful content, and anything illegal may not be listed. Violations lead to removal and account termination.</p>
+<h3>6. Liability</h3><p>The service is provided "as is". Loop Market is not liable for the content of listings or for disputes between buyers and sellers, to the maximum extent permitted by law.</p>`},
+privacy:{t:'Privacy Policy',b:`
+<p><i>Last updated: September 2026. This is a template — not legal advice. Have an attorney review before launch.</i></p>
+<h3>1. What we collect</h3><p>Buyer email addresses (for receipts and delivery), seller contact details and Stripe payout information, and basic purchase records. The app stores your settings on your own device.</p>
+<h3>2. Payments</h3><p>Card details are processed directly by Stripe. We never see or store your full card number.</p>
+<h3>3. How we use data</h3><p>To process orders, deliver products, pay sellers, prevent fraud, and improve the marketplace. We do not sell personal data.</p>
+<h3>4. Your rights</h3><p>You may request a copy or deletion of your data by contacting support. Deletion requests are honored except where records must be kept for tax or legal reasons.</p>
+<h3>5. Security</h3><p>All traffic uses HTTPS. API secrets are stored server-side only and never in the app.</p>`},
+seller:{t:'Seller Agreement',b:`
+<p><i>Last updated: September 2026. This is a template — not legal advice. Have an attorney review before launch.</i></p>
+<h3>1. Platform fee</h3><p>On every sale, Loop Market automatically retains <b>10% of the item price plus a $0.30 handling fee</b>. The remainder is transferred to your connected Stripe account. Tips left by buyers go to you in full.</p>
+<h3>2. Getting paid</h3><p>Payouts are handled by <b>Stripe Connect</b>. After completing Stripe's onboarding and identity verification, funds from your sales are paid out to your bank account on Stripe's standard payout schedule (typically 2–7 business days depending on country). You are responsible for any tax obligations on your earnings; depending on thresholds you may receive a 1099-K.</p>
+<h3>3. Delivery</h3><p>You must provide a working download link or clear delivery instructions for every listing. Delivery is automatic at checkout — buyers receive access immediately after payment.</p>
+<h3>4. Refunds & disputes</h3><p>Digital goods are generally non-refundable once delivered. If a buyer files a chargeback, the disputed amount (including the platform fee) may be debited from your pending payouts. Repeated disputes may lead to removal.</p>
+<h3>5. Prohibited items</h3><p>You may not sell pirated or unlicensed content, malware, or any item listed as prohibited in the Terms of Service. You confirm you own or are licensed to sell everything you list.</p>
+<h3>6. Promotion & premium</h3><p>Optional paid services: Featured listings (flat fee per placement period) and Premium seller subscriptions (monthly) are billed separately and are non-refundable.</p>`}
+};
+function openLegal(k){
+  const l=LEGAL[k];if(!l)return;
+  $('#legal-body').innerHTML=`<h2 style="margin-top:0">${l.t}</h2>${l.b}<p style="font-size:12px;color:var(--muted)"><i>This document is a template and not legal advice. Consult an attorney before launching.</i></p>`;
+  openModal('m-legal');
+}
+
+/* ============ init ============ */
+paintMode();renderHome();fillSettings();handleReturnParams();
+</script>
+</body>
+</html>

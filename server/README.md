@@ -65,6 +65,20 @@ gh repo create loop-market --public --source=. --push
 or local sales data are ever committed. Stripe keys live only in `.env`
 (locally) and in the host's environment variables (Render/Railway).
 
+## The app (front end)
+
+The Loop Market phone app lives at `../app/index.html` — a single self-contained
+file (no build step, no dependencies). It is 100% owned by Chuck (see
+`../app` alongside this backend; proprietary license in `LICENSE`).
+
+- **Run it:** open `app/index.html` in any phone or desktop browser.
+- **Deploy it:** put the file on any static host (Render Static Site, Railway,
+  Netlify, GitHub Pages, or even an S3 bucket). Then set this backend's
+  `CLIENT_URL` to the app's public URL so Stripe redirects and webhooks line up.
+- **Demo vs live:** with no backend URL in the app's Account → Settings, the app
+  runs in clearly-labeled demo mode (seeded products, simulated checkout and
+  sales, settings saved on-device). Paste the backend URL to go live.
+
 ## Connect the Loop Market app to this backend
 
 1. Deploy the backend and copy its public URL, e.g. `https://loop-market.onrender.com`.

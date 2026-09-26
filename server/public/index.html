@@ -162,8 +162,31 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,R
     <div class="foot">Loop Market · v1.0<br>© 2026 Chuck. All rights reserved.</div>
   </div>
 
-  <!-- PROMO LANDING -->
-  <div class="view" id="view-promo">
+  <!-- OWNER -->
+  <div class="view" id="view-owner">
+    <div class="sect">Platform status</div>
+    <div class="form">
+      <div class="drow"><div><b>Backend</b><div class="dmeta" id="ow-backend-url">Not connected</div></div><div id="ow-live" style="font-weight:800">—</div></div>
+      <div class="drow"><div><b>Mode</b><div class="dmeta">Demo or live money</div></div><div id="ow-mode" style="font-weight:800">—</div></div>
+    </div>
+    <div class="sect">Your platform revenue</div>
+    <div class="kpis">
+      <div class="kpi"><div class="v" id="ow-rev" style="color:var(--accent)">$0</div><div class="l">TOTAL COLLECTED</div></div>
+      <div class="kpi"><div class="v" id="ow-sales">$0</div><div class="l">SALES</div></div>
+      <div class="kpi"><div class="v" id="ow-vol">$0</div><div class="l">SALES VOLUME</div></div>
+    </div>
+    <div class="sect">Revenue by stream</div>
+    <div class="streams" id="ow-streams"></div>
+    <div class="sect">Dashboards</div>
+    <div class="form">
+      <button class="btn btn-g" onclick="window.open('https://dashboard.stripe.com','_blank')">⬡ Open Stripe dashboard</button>
+      <button class="btn btn-g" onclick="window.open('https://dashboard.render.com','_blank')">▲ Open Render dashboard</button>
+      <div class="hint">Day to day you live here. The dashboards are only for account-level stuff like payout bank details.</div>
+    </div>
+    <div class="foot">Loop Market owner view · everything in one app.</div>
+  </div>
+
+  <!-- PROMO LANDING -->  <div class="view" id="view-promo">
     <div class="hero">
       <h1>Loop Market</h1>
       <p>The marketplace for digital products. List in minutes, get paid automatically, keep 90% of every sale.</p>
@@ -183,6 +206,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,R
     <button class="tab" data-v="sell" onclick="showView('sell')"><span class="ic">＋</span>Sell</button>
     <button class="tab" data-v="earnings" onclick="showView('earnings')"><span class="ic">📈</span>Earnings</button>
     <button class="tab" data-v="account" onclick="showView('account')"><span class="ic">👤</span>Account</button>
+    <button class="tab" data-v="owner" onclick="showView('owner')"><span class="ic">👑</span>Owner</button>
   </nav>
 </div>
 
@@ -217,7 +241,12 @@ const SEED=[
 const CATS=['All','Presets','Templates','Music','Ebooks','Design','Software','Other'];
 
 /* ============ settings & state ============ */
-function getSettings(){return Object.assign({backendUrl:'',feePercent:10,sellerAccountId:'',sellerEmail:''},store.get('lm_settings',{}));}
+function getSettings(){
+  const s=Object.assign({backendUrl:'',feePercent:10,sellerAccountId:'',sellerEmail:''},store.get('lm_settings',{}));
+  // Served by the backend itself: talk to it by default, no setup needed.
+  if(!s.backendUrl&&/^https?:/.test(location.protocol))s.backendUrl=location.origin;
+  return s;
+}
 function saveSettingsObj(s){store.set('lm_settings',s);paintMode();}
 function paintMode(){$('#mode-pill').textContent=getSettings().backendUrl?'LIVE':'DEMO MODE';}
 function allProducts(){return SEED.concat(store.get('lm_listings',[]));}
@@ -236,6 +265,7 @@ function showView(v){
   $('#view-'+v).classList.add('active');
   $$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
   if(v==='earnings')renderEarnings();
+  if(v==='owner')renderOwner();
   if(v==='sell')renderMyListings();
   if(v==='account')fillSettings();
   window.scrollTo(0,0);
@@ -440,6 +470,27 @@ async function renderEarnings(){
     <div class="smain"><div class="st">${esc(x.product||'Sale')}</div><div class="ss">${new Date(x.created).toLocaleDateString()} · ${esc(x.buyerEmail||'buyer')}${x.demo?' · demo':''}</div></div>
     <div class="samt"><div class="a">${money(x.amount)}</div><div class="f">cut ${money(x.fee)}</div></div></div>`
     ).join(''):'<div class="center">No sales yet.<br>Share your products to get the first one!</div>';
+}
+
+/* ============ owner ============ */
+async function renderOwner(){
+  const s=getSettings();
+  const live=!!s.backendUrl;
+  $('#ow-backend-url').textContent=live?s.backendUrl:'Not connected — add it in Account → Settings';
+  $('#ow-live').innerHTML=live?'<span style="color:#16a34a">● Live</span>':'<span style="color:#d97706">● Demo</span>';
+  $('#ow-mode').textContent=live?'Live money':'Demo mode';
+  let rev=0,count=0,vol=0,by=null;
+  if(live){
+    const r=await api('/api/revenue');
+    if(r){rev=(r.totals&&r.totals.platformRevenue)||0;by=r.byStream;}
+    const sl=await api('/api/sales');
+    if(sl&&sl.sales){count=sl.sales.length;sl.sales.forEach(x=>vol+=x.amount||0);}
+  }
+  $('#ow-rev').textContent=money(rev);
+  $('#ow-sales').textContent=String(count);
+  $('#ow-vol').textContent=money(vol);
+  $('#ow-streams').innerHTML=streamRows(by||{});
+  if(!live)$('#ow-streams').insertAdjacentHTML('afterbegin','<div class="stream"><span>ℹ️ Demo data</span><b style="font-size:12px;color:var(--muted)">connect backend for live</b></div>');
 }
 
 /* ============ account ============ */

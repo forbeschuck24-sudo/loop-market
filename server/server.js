@@ -22,13 +22,19 @@ const path = require('path');
 const Stripe = require('stripe');
 
 const app = express();
+// Behind Render's proxy so req.protocol/host reflect the public URL.
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 4242;
 const PLATFORM_FEE_PERCENT = Number(process.env.PLATFORM_FEE_PERCENT || 10);
 const HANDLING_FEE_CENTS = Number(process.env.HANDLING_FEE_CENTS || 30);
 const PROMOTED_LISTING_PRICE_CENTS = Number(process.env.PROMOTED_LISTING_PRICE_CENTS || 499);
 const PROMOTED_LISTING_DAYS = Number(process.env.PROMOTED_LISTING_DAYS || 7);
 const PREMIUM_MONTHLY_CENTS = Number(process.env.PREMIUM_MONTHLY_CENTS || 999);
-const CLIENT_URL = (process.env.CLIENT_URL || 'http://localhost:8080').replace(/\/$/, '');
+// Base URL for Stripe redirects: explicit CLIENT_URL wins, otherwise the
+// server's own public URL (the app is served by this same server).
+function baseUrl(req) {
+  return (process.env.CLIENT_URL || (req.protocol + '://' + req.get('host'))).replace(/\/$/, '');
+}
 
 if (!process.env.STRIPE_SECRET_KEY) {
   console.warn('WARNING: STRIPE_SECRET_KEY is not set. Copy .env.example to .env and fill it in.');
@@ -238,8 +244,8 @@ app.post('/api/checkout/session', async (req, res) => {
         deliveryUrl: (deliveryUrl || '').slice(0, 500),
         deliveryInstructions: (deliveryInstructions || '').slice(0, 500),
       },
-      success_url: `${CLIENT_URL}/?purchase=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${CLIENT_URL}/?purchase=cancelled`,
+      success_url: `${baseUrl(req)}/?purchase=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl(req)}/?purchase=cancelled`,
     });
 
     res.json({ url: session.url });
@@ -279,8 +285,8 @@ app.post('/api/promotions/checkout', async (req, res) => {
         productTitle,
         sellerAccount: sellerStripeAccountId,
       },
-      success_url: `${CLIENT_URL}/?promotion=success`,
-      cancel_url: `${CLIENT_URL}/?promotion=cancelled`,
+      success_url: `${baseUrl(req)}/?promotion=success`,
+      cancel_url: `${baseUrl(req)}/?promotion=cancelled`,
     });
     res.json({ url: session.url });
   } catch (err) {
@@ -319,8 +325,8 @@ app.post('/api/subscriptions/checkout', async (req, res) => {
         metadata: { type: 'subscription', sellerAccount: sellerStripeAccountId },
       },
       metadata: { type: 'subscription', sellerAccount: sellerStripeAccountId },
-      success_url: `${CLIENT_URL}/?premium=success`,
-      cancel_url: `${CLIENT_URL}/?premium=cancelled`,
+      success_url: `${baseUrl(req)}/?premium=success`,
+      cancel_url: `${baseUrl(req)}/?premium=cancelled`,
     });
     res.json({ url: session.url });
   } catch (err) {
@@ -347,8 +353,8 @@ app.get('/api/connect/onboarding', async (req, res) => {
     });
     const link = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: `${CLIENT_URL}/?onboarding=refresh`,
-      return_url: `${CLIENT_URL}/?onboarding=done&account=${account.id}`,
+      refresh_url: `${baseUrl(req)}/?onboarding=refresh`,
+      return_url: `${baseUrl(req)}/?onboarding=done&account=${account.id}`,
       type: 'account_onboarding',
     });
     res.json({ accountId: account.id, url: link.url });
@@ -412,6 +418,11 @@ app.get('/api/revenue', (req, res) => {
     byStream.sale.platformCut + byStream.promotion.gross + byStream.subscription.gross;
   res.json({ events: [...events].reverse(), byStream, totals: { platformRevenue } });
 });
+
+// ---------------- Serve the Loop Market app itself ----------------
+// One deploy, one URL: the app lives in public/ and the API under /api/*.
+app.use(express.static(path.join(__dirname, 'public')));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => {
   console.log(

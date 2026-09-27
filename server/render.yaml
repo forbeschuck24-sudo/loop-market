@@ -16,3 +16,6 @@ services:
       - key: PROMOTED_LISTING_DAYS
       - key: PREMIUM_MONTHLY_CENTS
       - key: CLIENT_URL
+        sync: false
+      - key: OWNER_TOKEN
+        sync: false

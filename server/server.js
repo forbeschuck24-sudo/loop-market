@@ -30,6 +30,19 @@ const HANDLING_FEE_CENTS = Number(process.env.HANDLING_FEE_CENTS || 30);
 const PROMOTED_LISTING_PRICE_CENTS = Number(process.env.PROMOTED_LISTING_PRICE_CENTS || 499);
 const PROMOTED_LISTING_DAYS = Number(process.env.PROMOTED_LISTING_DAYS || 7);
 const PREMIUM_MONTHLY_CENTS = Number(process.env.PREMIUM_MONTHLY_CENTS || 999);
+// Owner token: protects /api/revenue and /api/sales (the Owner 👑 tab).
+// Set OWNER_TOKEN in Render env vars to a long random string, then paste the
+// same value in the app under Account → Settings → Owner token.
+// When OWNER_TOKEN is unset the endpoints stay open (local dev only) and the
+// server logs a warning at startup.
+const OWNER_TOKEN = process.env.OWNER_TOKEN || '';
+function requireOwner(req, res, next) {
+  if (!OWNER_TOKEN) return next(); // dev mode: open
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : req.query.token;
+  if (token && token === OWNER_TOKEN) return next();
+  return res.status(401).json({ error: 'Owner token required' });
+}
 // Base URL for Stripe redirects: explicit CLIENT_URL wins, otherwise the
 // server's own public URL (the app is served by this same server).
 function baseUrl(req) {
@@ -366,7 +379,8 @@ app.get('/api/connect/onboarding', async (req, res) => {
 
 // ---------------- Sales + revenue ----------------
 // GET /api/sales — marketplace sales (powers the app's Earnings tab).
-app.get('/api/sales', (req, res) => {
+// Owner-protected: buyer emails are sensitive.
+app.get('/api/sales', requireOwner, (req, res) => {
   const sales = readJson(REVENUE_FILE, []).filter((e) => e.stream === 'sale').reverse();
   res.json({ sales });
 });
@@ -391,7 +405,8 @@ app.get('/api/delivery/:sessionId', (req, res) => {
 });
 
 // GET /api/revenue — every revenue stream, broken down (powers the admin view).
-app.get('/api/revenue', (req, res) => {
+// Owner-protected: platform-wide financials.
+app.get('/api/revenue', requireOwner, (req, res) => {
   const events = readJson(REVENUE_FILE, []);
   const byStream = {
     sale: { count: 0, gross: 0, platformCut: 0, sellerVolume: 0 },
@@ -430,4 +445,7 @@ app.listen(PORT, () => {
       `promo $${(PROMOTED_LISTING_PRICE_CENTS / 100).toFixed(2)}/${PROMOTED_LISTING_DAYS}d | ` +
       `premium $${(PREMIUM_MONTHLY_CENTS / 100).toFixed(2)}/mo`
   );
+  if (!OWNER_TOKEN) {
+    console.warn('WARNING: OWNER_TOKEN is not set — /api/revenue and /api/sales are publicly readable. Set OWNER_TOKEN in production.');
+  }
 });

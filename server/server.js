@@ -56,14 +56,17 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder'
   apiVersion: '2024-06-20',
 });
 
-// ---------------- JSON file stores (MVP; swap for a real DB later) ----------------
+// ---------------- Durable store: Postgres when DATABASE_URL is set, JSON files otherwise ----------------
+// Render's filesystem is ephemeral (wiped on every deploy), so without DATABASE_URL the
+// revenue/subscription records only survive until the next deploy. Set DATABASE_URL to a
+// Postgres connection string to make them durable. Files remain as the local-dev fallback.
 const DATA_DIR = path.join(__dirname, 'data');
 const REVENUE_FILE = path.join(DATA_DIR, 'revenue.json');
 const SUBS_FILE = path.join(DATA_DIR, 'subscriptions.json');
 const PRICE_CACHE_FILE = path.join(DATA_DIR, 'stripe_price.json');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-function readJson(file, fallback) {
+function readJsonFile(file, fallback) {
   try {
     if (!fs.existsSync(file)) return fallback;
     return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -71,32 +74,87 @@ function readJson(file, fallback) {
     return fallback;
   }
 }
-function writeJson(file, data) {
+function writeJsonFile(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
-function recordEvent(evt) {
-  const events = readJson(REVENUE_FILE, []);
-  events.push({ id: evt.id || `evt_${Date.now()}`, created: new Date().toISOString(), ...evt });
-  writeJson(REVENUE_FILE, events);
-  return events[events.length - 1];
+
+let pgPool = null;
+if (process.env.DATABASE_URL) {
+  try {
+    const { Pool } = require('pg');
+    pgPool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    pgPool.on('error', (err) => console.error('pg pool error:', err.message));
+  } catch (err) {
+    console.error('pg init failed, using file store:', err.message);
+    pgPool = null;
+  }
 }
-// subscriptions.json: { "<subscriptionId>": { sellerAccount, email, status, currentPeriodEnd } }
-function getSubs() {
-  return readJson(SUBS_FILE, {});
+async function pgReady() {
+  if (!pgPool) return false;
+  if (pgPool._lm_ready) return true;
+  try {
+    await pgPool.query(
+      'CREATE TABLE IF NOT EXISTS kv_store (name TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT now())'
+    );
+    pgPool._lm_ready = true;
+    console.log('Postgres store ready (kv_store).');
+  } catch (err) {
+    console.error('pg unavailable, falling back to files:', err.message);
+    pgPool = null;
+  }
+  return !!pgPool;
 }
-function saveSub(subId, data) {
-  const subs = getSubs();
+// Named stores: 'revenue' (array), 'subscriptions' (object), 'stripe_price' (object).
+async function storeGet(name, file, fallback) {
+  if (await pgReady()) {
+    try {
+      const r = await pgPool.query('SELECT data FROM kv_store WHERE name = $1', [name]);
+      if (r.rows.length) return r.rows[0].data;
+    } catch (err) {
+      console.error(`pg read ${name} failed, file fallback:`, err.message);
+    }
+  }
+  return readJsonFile(file, fallback);
+}
+async function storeSet(name, file, data) {
+  if (await pgReady()) {
+    try {
+      await pgPool.query(
+        'INSERT INTO kv_store (name, data) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET data = EXCLUDED.data, updated_at = now()',
+        [name, JSON.stringify(data)]
+      );
+      return;
+    } catch (err) {
+      console.error(`pg write ${name} failed, file fallback:`, err.message);
+    }
+  }
+  writeJsonFile(file, data);
+}
+async function recordEvent(evt) {
+  const events = await storeGet('revenue', REVENUE_FILE, []);
+  const rec = { id: evt.id || `evt_${Date.now()}`, created: new Date().toISOString(), ...evt };
+  events.push(rec);
+  await storeSet('revenue', REVENUE_FILE, events);
+  return rec;
+}
+// subscriptions store: { "<subscriptionId>": { sellerAccount, email, status, currentPeriodEnd } }
+async function getSubs() {
+  return storeGet('subscriptions', SUBS_FILE, {});
+}
+async function saveSub(subId, data) {
+  const subs = await getSubs();
   subs[subId] = { ...(subs[subId] || {}), ...data };
-  writeJson(SUBS_FILE, subs);
+  await storeSet('subscriptions', SUBS_FILE, subs);
 }
-function findSubBySeller(sellerAccount) {
-  return Object.entries(getSubs()).find(([, s]) => s.sellerAccount === sellerAccount);
+async function findSubBySeller(sellerAccount) {
+  const subs = await getSubs();
+  return Object.entries(subs).find(([, s]) => s.sellerAccount === sellerAccount);
 }
 
 app.use(cors());
 
 // ---------------- Stripe webhook (needs the RAW body; before express.json) ----------------
-app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), (req, res) => {
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
   try {
@@ -113,7 +171,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), (req
     const buyerEmail = obj.customer_details?.email || obj.customer_email || null;
     const currency = (obj.currency || 'usd').toUpperCase();
     if (md.type === 'promotion') {
-      recordEvent({
+      await recordEvent({
         id: obj.id,
         stream: 'promotion',
         productId: md.productId || null,
@@ -127,7 +185,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), (req
       console.log('Recorded promotion purchase:', obj.id);
     } else if (md.type === 'subscription') {
       if (obj.subscription) {
-        saveSub(obj.subscription, {
+        await saveSub(obj.subscription, {
           sellerAccount: md.sellerAccount || null,
           email: buyerEmail,
           status: 'active',
@@ -136,7 +194,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), (req
       }
     } else {
       // Regular marketplace sale: platform keeps the fee, rest goes to seller.
-      recordEvent({
+      await recordEvent({
         id: obj.id,
         stream: 'sale',
         product: md.productTitle || 'Digital product',
@@ -159,7 +217,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), (req
   }
 
   if (event.type === 'customer.subscription.created' || event.type === 'customer.subscription.updated') {
-    saveSub(obj.id, {
+    await saveSub(obj.id, {
       sellerAccount: (obj.metadata || {}).sellerAccount || null,
       status: obj.status,
       currentPeriodEnd: obj.current_period_end
@@ -168,11 +226,11 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), (req
     });
   }
   if (event.type === 'customer.subscription.deleted') {
-    saveSub(obj.id, { status: 'canceled' });
+    await saveSub(obj.id, { status: 'canceled' });
   }
   if (event.type === 'invoice.payment_succeeded' && obj.subscription) {
-    const sub = getSubs()[obj.subscription] || {};
-    recordEvent({
+    const sub = (await getSubs())[obj.subscription] || {};
+    await recordEvent({
       stream: 'subscription',
       amount: obj.amount_paid,
       currency: (obj.currency || 'usd').toUpperCase(),
@@ -311,7 +369,7 @@ app.post('/api/promotions/checkout', async (req, res) => {
 // ---------------- Premium seller tier (monthly subscription) ----------------
 async function getPremiumPriceId() {
   if (process.env.PREMIUM_PRICE_ID) return process.env.PREMIUM_PRICE_ID;
-  const cached = readJson(PRICE_CACHE_FILE, null);
+  const cached = await storeGet('stripe_price', PRICE_CACHE_FILE, null);
   if (cached && cached.priceId) return cached.priceId;
   const price = await stripe.prices.create({
     unit_amount: PREMIUM_MONTHLY_CENTS,
@@ -319,7 +377,7 @@ async function getPremiumPriceId() {
     recurring: { interval: 'month' },
     product_data: { name: 'Loop Market Premium Seller' },
   });
-  writeJson(PRICE_CACHE_FILE, { priceId: price.id });
+  await storeSet('stripe_price', PRICE_CACHE_FILE, { priceId: price.id });
   return price.id;
 }
 
@@ -348,10 +406,10 @@ app.post('/api/subscriptions/checkout', async (req, res) => {
   }
 });
 
-app.get('/api/subscriptions/status', (req, res) => {
+app.get('/api/subscriptions/status', async (req, res) => {
   const sellerAccount = req.query.sellerAccount;
   if (!sellerAccount) return res.status(400).json({ error: 'sellerAccount query param required' });
-  const found = findSubBySeller(sellerAccount);
+  const found = await findSubBySeller(sellerAccount);
   if (!found) return res.json({ active: false });
   const [, sub] = found;
   res.json({ active: sub.status === 'active' || sub.status === 'trialing', ...sub });
@@ -380,8 +438,8 @@ app.get('/api/connect/onboarding', async (req, res) => {
 // ---------------- Sales + revenue ----------------
 // GET /api/sales — marketplace sales (powers the app's Earnings tab).
 // Owner-protected: buyer emails are sensitive.
-app.get('/api/sales', requireOwner, (req, res) => {
-  const sales = readJson(REVENUE_FILE, []).filter((e) => e.stream === 'sale').reverse();
+app.get('/api/sales', requireOwner, async (req, res) => {
+  const sales = (await storeGet('revenue', REVENUE_FILE, [])).filter((e) => e.stream === 'sale').reverse();
   res.json({ sales });
 });
 
@@ -389,8 +447,8 @@ app.get('/api/sales', requireOwner, (req, res) => {
 // After a successful payment the app's success page calls this with the
 // Checkout Session ID and instantly shows the download link / instructions.
 // No human involvement: the webhook stored the delivery payload at sale time.
-app.get('/api/delivery/:sessionId', (req, res) => {
-  const events = readJson(REVENUE_FILE, []);
+app.get('/api/delivery/:sessionId', async (req, res) => {
+  const events = await storeGet('revenue', REVENUE_FILE, []);
   const sale = events.find((e) => e.stream === 'sale' && e.id === req.params.sessionId);
   if (!sale) return res.status(404).json({ error: 'Sale not found or payment not completed yet' });
   res.json({
@@ -406,8 +464,8 @@ app.get('/api/delivery/:sessionId', (req, res) => {
 
 // GET /api/revenue — every revenue stream, broken down (powers the admin view).
 // Owner-protected: platform-wide financials.
-app.get('/api/revenue', requireOwner, (req, res) => {
-  const events = readJson(REVENUE_FILE, []);
+app.get('/api/revenue', requireOwner, async (req, res) => {
+  const events = await storeGet('revenue', REVENUE_FILE, []);
   const byStream = {
     sale: { count: 0, gross: 0, platformCut: 0, sellerVolume: 0 },
     promotion: { count: 0, gross: 0 },

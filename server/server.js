@@ -242,6 +242,37 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
     console.log('Recorded subscription payment:', obj.id);
   }
 
+  // Refunds: Stripe does NOT auto-reverse the seller's transfer on a destination
+  // charge, so do it here — otherwise a refunded buyer AND a paid seller both
+  // walk away with the money. Reverses the cumulative refunded amount, so
+  // partial and repeated refunds stay correct.
+  if (event.type === 'charge.refunded' && obj.transfer) {
+    const refundedTotal = obj.amount_refunded || 0;
+    let reversedAmount = 0;
+    try {
+      const transfer = await stripe.transfers.retrieve(obj.transfer);
+      const alreadyReversed = transfer.amount_reversed || 0;
+      const toReverse = Math.max(0, Math.min(refundedTotal - alreadyReversed, transfer.amount - alreadyReversed));
+      if (toReverse > 0) {
+        await stripe.transfers.createReversal(obj.transfer, { amount: toReverse });
+        reversedAmount = toReverse;
+        console.log(`Reversed ${toReverse}c on transfer ${obj.transfer} for refunded charge ${obj.id}`);
+      }
+    } catch (err) {
+      console.error('Transfer reversal failed (refund still recorded):', err.message);
+    }
+    await recordEvent({
+      stream: 'refund',
+      amount: refundedTotal,
+      currency: (obj.currency || 'usd').toUpperCase(),
+      chargeId: obj.id,
+      transferId: obj.transfer,
+      reversedAmount,
+      buyerEmail: obj.receipt_email || obj.billing_details?.email || null,
+    });
+    console.log('Recorded refund:', obj.id, 'refunded:', refundedTotal, 'reversed:', reversedAmount);
+  }
+
   res.json({ received: true });
 });
 
@@ -471,6 +502,7 @@ app.get('/api/revenue', requireOwner, async (req, res) => {
     promotion: { count: 0, gross: 0 },
     subscription: { count: 0, gross: 0 },
     tip: { count: 0, gross: 0 },
+    refund: { count: 0, gross: 0 },
   };
   for (const e of events) {
     if (e.stream === 'sale') {
@@ -482,6 +514,12 @@ app.get('/api/revenue', requireOwner, async (req, res) => {
         byStream.tip.count += 1;
         byStream.tip.gross += e.tip;
       }
+    } else if (e.stream === 'refund') {
+      byStream.refund.count += 1;
+      byStream.refund.gross += e.amount || 0;
+      // Refunded sales no longer count toward net volume.
+      byStream.sale.gross -= e.amount || 0;
+      byStream.sale.sellerVolume -= e.amount || 0;
     } else if (byStream[e.stream]) {
       byStream[e.stream].count += 1;
       byStream[e.stream].gross += e.amount || 0;

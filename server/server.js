@@ -55,6 +55,8 @@ if (!process.env.STRIPE_SECRET_KEY) {
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
   apiVersion: '2024-06-20',
 });
+// Accounts v2 requires a current API version; v1 calls stay pinned as tested.
+const stripeV2 = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {});
 
 // ---------------- Durable store: Postgres when DATABASE_URL is set, JSON files otherwise ----------------
 // Render's filesystem is ephemeral (wiped on every deploy), so without DATABASE_URL the
@@ -460,7 +462,7 @@ app.get('/api/subscriptions/status', async (req, res) => {
 app.get('/api/connect/onboarding', async (req, res) => {
   try {
     const email = req.query.email || undefined;
-    const account = await stripe.v2.core.accounts.create({
+    const account = await stripeV2.v2.core.accounts.create({
       contact_email: email,
       display_name: email || 'Loop Market seller',
       dashboard: 'express',
@@ -474,7 +476,7 @@ app.get('/api/connect/onboarding', async (req, res) => {
         responsibilities: { fees_collector: 'application', losses_collector: 'application' },
       },
     });
-    const link = await stripe.v2.core.accountLinks.create({
+    const link = await stripeV2.v2.core.accountLinks.create({
       account: account.id,
       use_case: {
         type: 'account_onboarding',

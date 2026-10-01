@@ -116,6 +116,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,R
       <div class="field"><label>Description</label><textarea id="f-desc" placeholder="What does the buyer get?"></textarea></div>
       <div class="field"><label>Delivery — file link or instructions</label><textarea id="f-delivery" placeholder="https://… download link, or how the buyer receives the product"></textarea><div class="hint">Delivered to the buyer automatically after payment.</div></div>
       <button class="btn btn-p" onclick="createListing()">Publish listing</button>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-top:10px;cursor:pointer"><input type="checkbox" id="agree-seller" style="margin-top:3px"><span>I accept the <a href="#" onclick="openLegal('seller');return false" style="text-decoration:underline">Seller Agreement</a> — Loop Market keeps <b>10% + $0.30</b> per sale.</span></label>
       <button class="btn btn-s" onclick="connectStripe()">⬡ Connect Stripe to get paid</button>
       <div class="hint" style="font-size:12px;color:var(--muted);margin-top:8px">Connect links your Stripe account via the backend so payouts land in your bank automatically. In demo mode this step is simulated.</div>
     </div>
@@ -280,7 +281,7 @@ function showView(v){
   $$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
   if(v==='earnings')renderEarnings();
   if(v==='owner')renderOwner();
-  if(v==='sell')renderMyListings();
+  if(v==='sell'){renderMyListings();const s=getSettings();const cb=$('#agree-seller');if(cb&&s.sellerAgreementAcceptedAt)cb.checked=true;}
   if(v==='account')fillSettings();
   window.scrollTo(0,0);
 }
@@ -444,9 +445,16 @@ function renderMyListings(){
 async function connectStripe(){
   const s=getSettings();
   if(!s.backendUrl){alert('Demo mode: connect is simulated.\n\nWith a backend URL configured, this opens Stripe\'s secure onboarding so sellers can receive payouts.');return;}
+  // Seller Agreement acceptance is required before onboarding.
+  const cb=document.getElementById('agree-seller');
+  if(!s.sellerAgreementAcceptedAt){
+    if(cb&&cb.checked){s.sellerAgreementAcceptedAt=new Date().toISOString();saveSettingsObj(s);}
+    else{openLegal('seller');alert('Please read and accept the Seller Agreement (check the box) before connecting Stripe.');return;}
+  }
+  if(cb)cb.checked=true;
   const email=s.sellerEmail||prompt('Email for your Stripe seller account:');
   if(!email)return;s.sellerEmail=email;
-  const r=await api('/api/connect/onboarding?email='+encodeURIComponent(email));
+  const r=await api('/api/connect/onboarding?email='+encodeURIComponent(email)+'&agreed='+encodeURIComponent(s.sellerAgreementAcceptedAt));
   if(r&&r.url){s.sellerAccountId=r.accountId;saveSettingsObj(s);fillSettings();window.open(r.url,'_blank');}
   else alert('Could not reach the backend. Check the backend URL in settings.');
 }

@@ -67,6 +67,7 @@ const REVENUE_FILE = path.join(DATA_DIR, 'revenue.json');
 const SUBS_FILE = path.join(DATA_DIR, 'subscriptions.json');
 const PRICE_CACHE_FILE = path.join(DATA_DIR, 'stripe_price.json');
 const PROMOTIONS_FILE = path.join(DATA_DIR, 'promotions.json');
+const AGREEMENTS_FILE = path.join(DATA_DIR, 'seller_agreements.json');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 function readJsonFile(file, fallback) {
@@ -462,6 +463,10 @@ app.get('/api/subscriptions/status', async (req, res) => {
 app.get('/api/connect/onboarding', async (req, res) => {
   try {
     const email = req.query.email || undefined;
+    // Sellers must accept the Seller Agreement before onboarding. The app
+    // gates this with a checkbox; the server records the acceptance.
+    const agreedAt = req.query.agreed;
+    if (!agreedAt) return res.status(400).json({ error: 'Seller Agreement acceptance is required before onboarding.' });
     const account = await stripeV2.v2.core.accounts.create({
       contact_email: email,
       display_name: email || 'Loop Market seller',
@@ -488,6 +493,12 @@ app.get('/api/connect/onboarding', async (req, res) => {
       },
     });
     res.json({ accountId: account.id, url: link.url });
+    // Record the Seller Agreement acceptance against the new account.
+    try {
+      const agreements = (await storeGet('seller_agreements', AGREEMENTS_FILE, {})) || {};
+      agreements[account.id] = { email: email || null, acceptedAt: agreedAt, version: 1 };
+      await storeSet('seller_agreements', AGREEMENTS_FILE, agreements);
+    } catch (e) { console.error('agreement record error:', e.message); }
   } catch (err) {
     console.error('Connect onboarding error:', err.message);
     res.status(500).json({ error: err.message });

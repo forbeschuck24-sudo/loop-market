@@ -253,6 +253,17 @@ function paintMode(){$('#mode-pill').textContent=getSettings().backendUrl?'LIVE'
 function allProducts(){return SEED.concat(store.get('lm_listings',[]));}
 function getProduct(id){return allProducts().find(p=>p.id===id);}
 function isPromoted(id){const p=store.get('lm_promoted',{});return p[id]&&p[id]>Date.now();}
+async function syncPromotions(){
+  try{
+    const s=getSettings();if(!s.backendUrl)return;
+    const r=await api('/api/promotions/active');
+    if(r&&r.promotions){
+      const cur=store.get('lm_promoted',{});
+      for(const pid of Object.keys(r.promotions))cur[pid]=Math.max(cur[pid]||0,r.promotions[pid]);
+      store.set('lm_promoted',cur);renderHome();
+    }
+  }catch(e){/* offline: keep local promotions */}
+}
 async function api(path,opts){
   const {backendUrl,ownerToken}=getSettings();if(!backendUrl)return null;
   const headers={'Content-Type':'application/json'};
@@ -401,8 +412,15 @@ async function handleReturnParams(){
     }else if(q.get('purchase')==='success'){showDelivery({paid:true,product:'Your product',delivery:null,demo:true});}
     history.replaceState(null,'',location.pathname);
   }
-  if(q.get('promotion')==='success'){alert('🎉 Your listing is now Featured!');history.replaceState(null,'',location.pathname);}
+  if(q.get('promotion')==='success'){await syncPromotions();alert('🎉 Your listing is now Featured!');history.replaceState(null,'',location.pathname);}
   if(q.get('premium')==='success'){alert('🎉 Welcome to Premium!');history.replaceState(null,'',location.pathname);}
+  if(q.get('onboarding')==='done'){
+    const acct=q.get('account'),s=getSettings();
+    if(acct){s.sellerAccountId=acct;saveSettingsObj(s);fillSettings();}
+    alert('🎉 Stripe onboarding complete — your seller account is connected.');
+    history.replaceState(null,'',location.pathname);
+  }
+  if(q.get('onboarding')==='refresh'){alert('Your Stripe onboarding session expired. Please reconnect to continue.');history.replaceState(null,'',location.pathname);}
 }
 
 /* ============ sell ============ */
@@ -557,7 +575,7 @@ function openLegal(k){
 }
 
 /* ============ init ============ */
-paintMode();renderHome();fillSettings();handleReturnParams();
+paintMode();renderHome();fillSettings();handleReturnParams();syncPromotions();
 </script>
 </body>
 </html>

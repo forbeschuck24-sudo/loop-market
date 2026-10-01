@@ -64,6 +64,7 @@ const DATA_DIR = path.join(__dirname, 'data');
 const REVENUE_FILE = path.join(DATA_DIR, 'revenue.json');
 const SUBS_FILE = path.join(DATA_DIR, 'subscriptions.json');
 const PRICE_CACHE_FILE = path.join(DATA_DIR, 'stripe_price.json');
+const PROMOTIONS_FILE = path.join(DATA_DIR, 'promotions.json');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 function readJsonFile(file, fallback) {
@@ -182,6 +183,12 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         buyerEmail,
         days: PROMOTED_LISTING_DAYS,
       });
+      // Activate the featured placement so the storefront shows it.
+      if (md.productId) {
+        const promos = (await storeGet('promotions', PROMOTIONS_FILE, {})) || {};
+        promos[md.productId] = Date.now() + PROMOTED_LISTING_DAYS * 864e5;
+        await storeSet('promotions', PROMOTIONS_FILE, promos);
+      }
       console.log('Recorded promotion purchase:', obj.id);
     } else if (md.type === 'subscription') {
       if (obj.subscription) {
@@ -446,22 +453,57 @@ app.get('/api/subscriptions/status', async (req, res) => {
   res.json({ active: sub.status === 'active' || sub.status === 'trialing', ...sub });
 });
 
-// ---------------- Seller onboarding (Stripe Connect Express) ----------------
+// ---------------- Seller onboarding (Stripe Connect, Accounts v2) ----------------
+// Stripe no longer allows Accounts v1 (type: 'express') on this platform.
+// v2 flow: create the account via /v2/core/accounts, then mint a hosted
+// onboarding link via /v2/core/account_links.
 app.get('/api/connect/onboarding', async (req, res) => {
   try {
-    const account = await stripe.accounts.create({
-      type: 'express',
-      email: req.query.email || undefined,
+    const email = req.query.email || undefined;
+    const account = await stripe.v2.core.accounts.create({
+      contact_email: email,
+      display_name: email || 'Loop Market seller',
+      dashboard: 'express',
+      identity: { country: 'us', entity_type: 'individual' },
+      configuration: {
+        merchant: { capabilities: { card_payments: { requested: true } } },
+        recipient: { capabilities: { stripe_balance: { stripe_transfers: { requested: true } } } },
+      },
+      defaults: {
+        currency: 'usd',
+        responsibilities: { fees_collector: 'application', losses_collector: 'application' },
+      },
     });
-    const link = await stripe.accountLinks.create({
+    const link = await stripe.v2.core.accountLinks.create({
       account: account.id,
-      refresh_url: `${baseUrl(req)}/?onboarding=refresh`,
-      return_url: `${baseUrl(req)}/?onboarding=done&account=${account.id}`,
-      type: 'account_onboarding',
+      use_case: {
+        type: 'account_onboarding',
+        account_onboarding: {
+          configurations: ['merchant', 'recipient'],
+          refresh_url: `${baseUrl(req)}/?onboarding=refresh`,
+          return_url: `${baseUrl(req)}/?onboarding=done&account=${account.id}`,
+        },
+      },
     });
     res.json({ accountId: account.id, url: link.url });
   } catch (err) {
     console.error('Connect onboarding error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/promotions/active — featured placements the storefront should show.
+// Public: only product ids + expiry timestamps, no money data.
+app.get('/api/promotions/active', async (req, res) => {
+  try {
+    const promos = (await storeGet('promotions', PROMOTIONS_FILE, {})) || {};
+    const now = Date.now();
+    const active = {};
+    for (const [pid, exp] of Object.entries(promos)) {
+      if (Number(exp) > now) active[pid] = Number(exp);
+    }
+    res.json({ promotions: active });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
